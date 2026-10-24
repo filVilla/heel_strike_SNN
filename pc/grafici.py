@@ -3,6 +3,7 @@
 
 import argparse
 import os
+from datetime import datetime
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -16,11 +17,14 @@ parser.add_argument("file", nargs="+", help="uno o piu' CSV, es. dati/normale.cs
 parser.add_argument("--soglia", type=float, default=0.5, help="soglia FSR in volt per il contatto (default 0.5)")
 parser.add_argument("--picco", type=float, default=2.0,
                     help="forza minima (V) raggiunta perche' sia un passo vero (default 2.0)")
-parser.add_argument("--da", type=float, default=0, help="secondo da cui iniziare il grafico nel tempo")
+parser.add_argument("--salta", type=float, default=30,
+                    help="secondi iniziali scartati, mentre si prende il ritmo (default 30)")
+parser.add_argument("--da", type=float, default=None,
+                    help="secondo da cui iniziare il grafico nel tempo (default = --salta)")
 parser.add_argument("--durata", type=float, default=20, help="secondi mostrati nel grafico nel tempo")
 args = parser.parse_args()
-
-os.makedirs("grafici", exist_ok=True)
+if args.da is None:
+    args.da = args.salta
 
 plt.rcParams.update({
     "axes.spines.top": False, "axes.spines.right": False,
@@ -57,6 +61,8 @@ def carica(percorso):
     d = d[~(d[imu] == 0).all(axis=1)].reset_index(drop=True)
 
     d["t"] = (d["tempo_ms"] - d["tempo_ms"].iloc[0]) / 1000
+    # Scarta l'inizio della prova; il tempo resta contato dall'inizio della registrazione
+    d = d[d["t"] >= args.salta].reset_index(drop=True)
     d["acc_norma"] = np.sqrt(d.acc_x**2 + d.acc_y**2 + d.acc_z**2)
 
     nome = os.path.splitext(os.path.basename(percorso))[0]
@@ -71,6 +77,10 @@ for percorso in args.file:
 
     hs = contatti(t, d["forza_V"].to_numpy(), args.soglia, args.picco)
     dt_ms = np.diff(d["tempo_ms"].to_numpy())
+
+    # Ogni prova nella sua cartella: le prove successive non la sovrascrivono
+    cartella = os.path.join("grafici", nome)
+    os.makedirs(cartella, exist_ok=True)
 
     print(f"{percorso}: {len(d)} righe, {t[-1]:.1f} s, dt mediano {np.median(dt_ms):.0f} ms, {len(hs)} contatti")
 
@@ -98,7 +108,7 @@ for percorso in args.file:
     ax[0].set_title(f"{nome}: segnali nel tempo (linee verticali = contatti del tallone dalla forza)",
                     loc="left", fontsize=11)
     fig.tight_layout()
-    fig.savefig(f"grafici/{nome}_segnali.png")
+    fig.savefig(f"{cartella}/segnali.png")
     plt.close(fig)
 
     # Grafico 2: regolarita' del campionamento
@@ -108,7 +118,7 @@ for percorso in args.file:
     ax.set_ylabel("numero di righe")
     ax.set_title(f"{nome}: campionamento (mediana {np.median(dt_ms):.0f} ms)", loc="left", fontsize=11)
     fig.tight_layout()
-    fig.savefig(f"grafici/{nome}_dt.png")
+    fig.savefig(f"{cartella}/dt.png")
     plt.close(fig)
 
     # Grafico 3: IMU nei +-200 ms intorno a ogni contatto
@@ -134,23 +144,30 @@ for percorso in args.file:
         ax[0].set_title(f"{nome}: IMU intorno ai {len(hs)} contatti (grigio = singoli, blu = media)",
                         loc="left", fontsize=11)
         fig.tight_layout()
-        fig.savefig(f"grafici/{nome}_intorno_contatto.png")
+        fig.savefig(f"{cartella}/intorno_contatto.png")
         plt.close(fig)
 
     if len(hs) > 1:
         durate_passo[nome] = np.diff(hs)
 
-# Grafico 4: durata del passo per file
+# Grafico 4: durata del ciclo del passo (stride: contatto -> contatto successivo dello stesso piede)
+# Con un solo file va nella sua cartella, con piu' file in grafici/confronto_<data>_<ora>/
 if durate_passo:
+    if len(args.file) == 1:
+        cartella = os.path.join("grafici", nome)
+    else:
+        cartella = os.path.join("grafici", "confronto_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+        os.makedirs(cartella, exist_ok=True)
+
     fig, ax = plt.subplots(figsize=(7, 4))
     ax.boxplot(list(durate_passo.values()), tick_labels=list(durate_passo.keys()), widths=0.5,
                medianprops={"color": BLU, "linewidth": 2},
                boxprops={"color": GRIGIO}, whiskerprops={"color": GRIGIO},
                capprops={"color": GRIGIO}, flierprops={"markeredgecolor": GRIGIO})
-    ax.set_ylabel("durata del passo (s)")
-    ax.set_title("Durata del passo per file", loc="left", fontsize=11)
+    ax.set_ylabel("durata del ciclo, stride (s)")
+    ax.set_title(f"Durata del ciclo del passo (stride), primi {args.salta:g} s esclusi", loc="left", fontsize=11)
     fig.tight_layout()
-    fig.savefig("grafici/durata_passo.png")
+    fig.savefig(f"{cartella}/durata_passo.png")
     plt.close(fig)
 
 print("Grafici salvati in", os.path.abspath("grafici"))

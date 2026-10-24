@@ -1,6 +1,6 @@
 # Cavigliera IMU + sensore di forza – relazione del lavoro svolto
 
-Aggiornata al 22/10/2026.
+Aggiornata al 24/10/2026.
 
 ## 1. Obiettivo
 
@@ -148,21 +148,136 @@ una precisione migliore dei 20 ms del campionamento.
 
 | File | Asse x | Asse y | A cosa serve |
 |---|---|---|---|
-| `<nome>_segnali.png` | tempo (s), 20 s di default | forza (V), modulo dell'accelerazione \|acc\| (m/s²), giroscopio sui 3 assi (°/s) | verifica visiva: le linee verticali (contatti trovati) devono cadere sul fronte di salita della forza |
-| `<nome>_dt.png` | intervallo tra righe consecutive (ms) | numero di righe | controlla che il campionamento sia regolare (un'unica barra a 20 ms) |
-| `<nome>_intorno_contatto.png` | tempo relativo al contatto, da −200 a +200 ms | \|acc\|, gyr_x, gyr_y, gyr_z | sovrappone tutti i contatti (grigio) e la loro media (blu): mostra la forma tipica del segnale IMU al contatto |
-| `durata_passo.png` | file | tempo tra due contatti successivi dello stesso piede (s) | boxplot: confronta le velocità di cammino |
+| `grafici/<nome>/segnali.png` | tempo (s), 20 s di default | forza (V), modulo dell'accelerazione \|acc\| (m/s²), giroscopio sui 3 assi (°/s) | verifica visiva: le linee verticali (contatti trovati) devono cadere sul fronte di salita della forza |
+| `grafici/<nome>/dt.png` | intervallo tra righe consecutive (ms) | numero di righe | controlla che il campionamento sia regolare (un'unica barra a 20 ms) |
+| `grafici/<nome>/intorno_contatto.png` | tempo relativo al contatto, da −200 a +200 ms | \|acc\|, gyr_x, gyr_y, gyr_z | sovrappone tutti i contatti (grigio) e la loro media (blu): mostra la forma tipica del segnale IMU al contatto |
+| `grafici/<nome>/durata_passo.png` | file | durata del ciclo del passo (stride): tempo tra due contatti successivi dello stesso piede (s) | boxplot: confronta le velocità di cammino |
 
 Il grafico nel tempo mostra solo 20 s per leggibilità: 10 minuti sono circa
 300 passi e in un'unica immagine non si distinguerebbero. Tutti gli altri
-grafici usano l'intera registrazione.
+grafici usano l'intera registrazione, tranne i primi 30 s (opzione `--salta`),
+in cui si sta ancora prendendo il ritmo.
+
+Ogni prova ha la sua cartella `grafici/<nome>/`, dove `<nome>` è il nome del
+CSV (stile, data e ora): le prove successive non sovrascrivono i grafici delle
+precedenti. Se si passano più CSV insieme, il confronto delle durate va in
+`grafici/confronto_<data>_<ora>/`.
+
+### Come leggere i grafici
+
+Gli esempi tra parentesi si riferiscono alla prova di 10 minuti del
+24/10/2026 (`normale_2026-10-24_16-00-53`).
+
+#### `segnali.png`: i segnali nel tempo
+
+Tre pannelli uno sotto l'altro, con lo stesso asse del tempo. Il tempo è
+contato dall'inizio della registrazione; di default il grafico parte da 30 s
+e mostra 20 s (si cambia con `--da` e `--durata`). Le **linee verticali
+grigie** sono i contatti del tallone trovati dalla forza e attraversano tutti
+e tre i pannelli, così si vede cosa fa l'IMU in quell'istante.
+
+- **Forza (V):** è un'onda "a gradini". In alto (~3.1 V) il tallone è
+  appoggiato, in basso (~0 V) è sollevato. La linea tratteggiata è la soglia
+  di 0.5 V. Ogni gradino in salita è un contatto, e lì deve cadere una linea
+  verticale. La larghezza del gradino è il tempo in cui il tallone resta a
+  terra (circa 0.3 s), lo spazio tra due gradini è il tempo in cui è sollevato.
+  Il gradino è piatto in alto perché l'FSR satura: misura bene *quando* c'è
+  contatto, non *quanta* forza.
+- **\|acc\| (m/s²):** modulo dell'accelerazione, gravità compresa. Da fermi
+  vale circa 9.8 m/s². Camminando oscilla attorno a quel valore, con un picco
+  poco dopo ogni contatto (l'impatto del piede).
+- **Giroscopio (°/s):** velocità di rotazione sui tre assi del sensore.
+  L'oscillazione più ampia (qui `gyr_z`, ±200 °/s) è la gamba che ruota
+  avanti e indietro a ogni passo. Gli altri assi hanno ampiezza minore, con
+  scatti brevi subito dopo il contatto.
+
+**Cosa è normale:** gradini tutti simili, una linea verticale su ogni fronte
+di salita, lo stesso andamento dell'IMU ripetuto a ogni ciclo.
+
+**Segnali di problema:**
+- un gradino senza linea verticale: contatto perso (forse il picco non arriva
+  a 2 V, si abbassa `--picco`);
+- una linea verticale senza gradino vero: falso contatto;
+- spike sottili e isolati nella forza durante la fase sollevata (nella prova
+  ce ne sono, fino a ~1.9 V): sono tocchi o disturbi di un solo campione,
+  scartati perché non arrivano a 2 V;
+- forza ferma in alto o in basso per molti secondi: FSR spostato o staccato.
+
+#### `dt.png`: regolarità del campionamento
+
+Istogramma del tempo tra una riga del CSV e la successiva: sull'asse x i
+millisecondi, sull'asse y quante righe hanno quel valore. Non dice nulla sulla
+camminata, serve solo a controllare che la registrazione sia stata regolare.
+
+**Cosa è normale:** un'unica barra a 20 ms (nella prova: tutte le 28 500 righe
+a 20 ms esatti).
+
+**Segnali di problema:** barre a 40, 60 ms… indicano righe perse (USB, scheda
+troppo lenta, righe scartate dal logger); barre sparse indicano un
+campionamento irregolare, e quindi tempi dei contatti meno precisi. Va
+ricontrollato soprattutto se si cambia la frequenza nel firmware.
+
+#### `intorno_contatto.png`: l'IMU attorno a ogni contatto
+
+Quattro pannelli: \|acc\|, `gyr_x`, `gyr_y`, `gyr_z`. Per ogni contatto si
+prende il segnale da 200 ms prima a 200 ms dopo e lo si sovrappone a tutti gli
+altri, allineati sull'istante del contatto.
+
+- **Asse x:** tempo dal contatto in ms. Lo **0** (linea tratteggiata) è
+  l'istante in cui la forza supera 0.5 V; i valori negativi sono prima del
+  contatto (gamba ancora in volo), quelli positivi dopo.
+- **Curve grigie:** un contatto ciascuna (nella prova 482).
+- **Curva blu:** la media di tutti i contatti, cioè la "forma tipica".
+- Ogni pannello ha la sua scala sull'asse y.
+
+**Come interpretarlo:**
+- **Larghezza della fascia grigia:** più è stretta, più il segnale è uguale da
+  un passo all'altro. Un segnale ripetibile è più facile da riconoscere per un
+  rilevatore (soglia o rete). Le curve grigie isolate fuori dalla fascia sono
+  passi anomali.
+- **Posizione dei punti caratteristici rispetto allo 0:** dice quanto prima o
+  dopo il riferimento della forza l'IMU "vede" il contatto. Nella prova
+  `gyr_z` passa da circa −230 a +120 °/s e attraversa lo zero proprio vicino
+  allo 0: è il cambio di rotazione della gamba al contatto, il marcatore usato
+  in letteratura. I picchi brevi di \|acc\|, `gyr_x` e `gyr_y` arrivano invece
+  a **+75…+120 ms**: probabilmente è il resto del piede che batte a terra
+  (appoggio completo), non il primo tocco del tallone.
+- **Attenzione alla media:** se i picchi dei singoli passi non cadono tutti
+  nello stesso istante, la media li appiattisce. Per l'ampiezza dei picchi
+  conviene guardare le curve grigie, non quella blu.
+
+#### `durata_passo.png`: durata del ciclo del passo
+
+Boxplot della durata del **ciclo del passo** (*stride*): il tempo tra un
+contatto e il successivo **dello stesso piede**. È il doppio del "passo" vero
+e proprio (*step*), che va da un piede all'altro. Con un solo file c'è un box;
+con più file ce n'è uno per file, affiancati.
+
+- **Scatola:** contiene la metà centrale dei cicli (dal 25° al 75°
+  percentile). Nella prova: da circa 1.16 a 1.20 s.
+- **Linea blu:** la mediana (nella prova circa 1.18 s).
+- **Baffi:** arrivano fino ai cicli più lontani ancora considerati normali,
+  al massimo 1.5 volte l'altezza della scatola oltre i suoi bordi.
+- **Palline:** cicli anomali (outlier), oltre i baffi. Ognuna è un singolo
+  ciclo. Nella prova sono una ventina tra 1.27 e 1.33 s e uno a circa 1.08 s:
+  piccoli rallentamenti o esitazioni, cicli veri.
+
+**Come interpretarlo:**
+- **Altezza della scatola:** quanto è regolare l'andatura. Scatola bassa =
+  ritmo costante.
+- **Confronto tra file:** una scatola più in basso indica una camminata più
+  veloce (cicli più brevi). Ci si aspetta normale > veloce.
+- **Errori di rilevamento:** un contatto perso fa comparire un ciclo lungo
+  circa il **doppio** della mediana (~2.4 s), un falso contatto due cicli
+  lunghi circa la **metà** (~0.6 s). Nella prova non ce ne sono, quindi tutti
+  i contatti sono stati trovati correttamente.
 
 ## 7. Risultati della prova di test (60 s, camminata normale)
 
 - **Campionamento:** 2975 righe valide, tutte a 20 ms esatti.
 - **Forza:** segnale "a gradini" pulito (0 V ↔ ~3.1 V), **41 contatti**
   trovati, tutti corrispondenti a passi veri.
-- **Durata del passo:** mediana **1.37 s** (quasi tutti tra 1.3 e 1.45 s). I
+- **Durata del ciclo del passo (stride):** mediana **1.37 s** (quasi tutti tra 1.3 e 1.45 s). I
   pochi valori tra 1.65 e 1.85 s sono probabilmente curve o rallentamenti.
 - **IMU intorno al contatto:** le 41 curve si sovrappongono bene, quindi il
   segnale è ripetibile.

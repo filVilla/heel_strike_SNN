@@ -109,10 +109,10 @@ Per ogni file:
 
 | Immagine | Cosa mostra | A cosa serve |
 |---|---|---|
-| `<nome>_segnali.png` | forza, accelerazione e giroscopio per 20 s, con una linea verticale a ogni contatto | vedere a occhio che i contatti trovati sono giusti |
-| `<nome>_dt.png` | quanto tempo passa tra una riga e la successiva | controllare che le righe arrivino davvero ogni 20 ms |
-| `<nome>_intorno_contatto.png` | i segnali IMU da 200 ms prima a 200 ms dopo ogni contatto, tutti sovrapposti, più la media | vedere la "forma tipica" del segnale quando il tallone tocca |
-| `durata_passo.png` | quanto dura ogni passo, per ogni file | confrontare prove e velocità diverse |
+| `grafici/<nome>/segnali.png` | forza, accelerazione e giroscopio per 20 s, con una linea verticale a ogni contatto | vedere a occhio che i contatti trovati sono giusti |
+| `grafici/<nome>/dt.png` | quanto tempo passa tra una riga e la successiva | controllare che le righe arrivino davvero ogni 20 ms |
+| `grafici/<nome>/intorno_contatto.png` | i segnali IMU da 200 ms prima a 200 ms dopo ogni contatto, tutti sovrapposti, più la media | vedere la "forma tipica" del segnale quando il tallone tocca |
+| `grafici/<nome>/durata_passo.png` | quanto dura ogni ciclo del passo (stride: da un contatto al successivo dello stesso piede), per ogni file, esclusi i primi 30 s | confrontare prove e velocità diverse |
 
 ## 5. Scelte di progettazione
 
