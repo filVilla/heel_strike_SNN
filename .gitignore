@@ -3,4 +3,3 @@ __pycache__/
 .vscode/
 pc/dati.csv
 pc/camminata_*.csv
-pc/dati/
