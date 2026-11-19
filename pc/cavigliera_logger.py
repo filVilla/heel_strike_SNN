@@ -1,4 +1,7 @@
-# Legge i dati della cavigliera dalla USB e li salva in dati/<stile>_<data>_<ora>.csv
+# REGISTRAZIONE DEI DATI
+# Cosa fa: legge dalla USB le righe mandate dal firmware e le salva in dati/<stile>_<data>_<ora>.csv,
+#          aggiungendo la colonna "stile"; si ferma da solo dopo la durata scelta (default 10 min).
+
 # Uso: python3 cavigliera_logger.py normale [--minuti 1] [--porta /dev/ttyACM0]
 
 import argparse
@@ -17,6 +20,9 @@ COLONNE = [
     "acc_x", "acc_y", "acc_z",
     "gyr_x", "gyr_y", "gyr_z",
     "forza_V",
+    "q_w", "q_x", "q_y", "q_z",
+    "lin_x", "lin_y", "lin_z",
+    "cal_sys", "cal_gyr", "cal_acc", "cal_mag",
 ]
 
 parser = argparse.ArgumentParser(description="Registra una prova della cavigliera in CSV")
@@ -86,7 +92,7 @@ try:
         if n % 250 == 0:
             mancano = (durata_ms - trascorso) / 1000
             print(f"{n} righe | mancano {mancano // 60:.0f} min {mancano % 60:.0f} s"
-                  f" | forza {valori[10]} V")
+                  f" | forza {valori[10]} V | calibrazione sys/gyr/acc/mag {'/'.join(valori[18:22])}")
             file.flush()
 
 except KeyboardInterrupt:

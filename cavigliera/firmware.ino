@@ -1,8 +1,10 @@
+// FIRMWARE DELLA CAVIGLIERA (Adafruit QT Py RP2040)
+// Cosa fa: ogni 20 ms (50 Hz) legge l'IMU BNO055 (angoli, accelerometro, giroscopio, quaternione,
+//          calibrazione) e la forza del tallone (FSR tramite ADS1115) e manda tutto su una riga CSV via USB.
 
 #include <Wire.h>              
 #include <Adafruit_Sensor.h>   
 #include <Adafruit_BNO055.h>   
-
 
 #define USA_ADS1115 1
 
@@ -11,24 +13,18 @@
 Adafruit_ADS1115 ads;          
 #endif
 
-
 Adafruit_BNO055 bno = Adafruit_BNO055(55, 0x28, &Wire1);
-
 
 const unsigned long PERIODO_MS = 20;  // 50 Hz
 
 unsigned long prossimo = 0;
 
-
 void setup() {
   
-
   Serial.begin(115200);
-
  
   while (!Serial) {}
 
-  
   if (!bno.begin()) {
     while (1) {
       Serial.println("# ERRORE: BNO055 non trovato");
@@ -85,6 +81,15 @@ void loop() {
   // Velocita' angolare (quanto velocemente ruota) in gradi al secondo,
   // sui 3 assi del sensore. Da fermo vale circa 0.
   imu::Vector<3> gyr   = bno.getVector(Adafruit_BNO055::VECTOR_GYROSCOPE);     // gradi/s, assi del sensore
+  // Orientamento come quaternione (w, x, y, z): a differenza degli angoli
+  // di Eulero non ha posizioni in cui i valori diventano instabili.
+  imu::Quaternion q    = bno.getQuat();
+  // Accelerazione senza la gravita' (m/s^2): da fermo vale circa 0.
+  imu::Vector<3> lin   = bno.getVector(Adafruit_BNO055::VECTOR_LINEARACCEL);   // m/s^2
+  // Calibrazione da 0 (non calibrato) a 3 (calibrato) per sistema,
+  // giroscopio, accelerometro e magnetometro.
+  uint8_t cal_sys, cal_gyr, cal_acc, cal_mag;
+  bno.getCalibration(&cal_sys, &cal_gyr, &cal_acc, &cal_mag);
 
   // Lettura del sensore di forza, convertita in volt 
 #if USA_ADS1115
@@ -96,12 +101,7 @@ void loop() {
   float forza = analogRead(A0) * 3.3 / 4095.0;
 #endif
 
-  // Invio della riga al PC
-  // Serial.print scrive un valore senza andare a capo; il secondo numero
-  // indica quante cifre decimali scrivere. Tra un valore e l'altro va una
-  // virgola. Serial.println alla fine scrive l'ultimo valore e va a capo:
-  // il "a capo" segna la fine della riga per il programma Python.
-  // L'ORDINE dei valori deve essere uguale a COLONNE in cavigliera_logger.py.
+  
   Serial.print(t);            Serial.print(',');
   Serial.print(euler.x(), 2); Serial.print(',');  // yaw
   Serial.print(euler.y(), 2); Serial.print(',');  // roll
@@ -112,5 +112,16 @@ void loop() {
   Serial.print(gyr.x(), 3);   Serial.print(',');
   Serial.print(gyr.y(), 3);   Serial.print(',');
   Serial.print(gyr.z(), 3);   Serial.print(',');
-  Serial.println(forza, 3);   // volt
+  Serial.print(forza, 3);     Serial.print(',');  // volt
+  Serial.print(q.w(), 4);     Serial.print(',');
+  Serial.print(q.x(), 4);     Serial.print(',');
+  Serial.print(q.y(), 4);     Serial.print(',');
+  Serial.print(q.z(), 4);     Serial.print(',');
+  Serial.print(lin.x(), 3);   Serial.print(',');
+  Serial.print(lin.y(), 3);   Serial.print(',');
+  Serial.print(lin.z(), 3);   Serial.print(',');
+  Serial.print(cal_sys);      Serial.print(',');
+  Serial.print(cal_gyr);      Serial.print(',');
+  Serial.print(cal_acc);      Serial.print(',');
+  Serial.println(cal_mag);
 }
